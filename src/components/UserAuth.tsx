@@ -4,6 +4,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 
+type UserProfile = {
+    name: string;
+    email: string;
+    picture: string;
+};
 
 /**
  * React component that manages user authentication via Amazon Cognito OAuth2.
@@ -12,13 +17,12 @@ import Image from 'next/image';
  *
  * @returns The rendered authentication UI based on the user's authentication state.
  */
-
 export default function UserAuth() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const code = searchParams.get('code');
 
-    const [profile, setProfile] = useState<any>(null);
+    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [jwt, setJwt] = useState('');
 
     const clientId = '4o5ag29jbf7o9lk8c9he27boc2';
@@ -26,49 +30,54 @@ export default function UserAuth() {
     const redirectUri = 'https://saas.p1.sameerbiradar.xyz';
     const loginUrl = `https://${domain}/login?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=email+openid+profile`;
 
-    const fetchToken = useCallback(async (authCode: string) => {
-        try {
-            const res = await fetch(`https://${domain}/oauth2/token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    grant_type: 'authorization_code',
-                    client_id: clientId,
-                    code: authCode,
-                    redirect_uri: redirectUri,
-                }),
-            });
-
-            const data = await res.json();
-
-            if (data.id_token) {
-                if (typeof window !== 'undefined') {
-                    localStorage.setItem('id_token', data.id_token);
-                    localStorage.setItem('access_token', data.access_token);
-                    localStorage.setItem('refresh_token', data.refresh_token);
-                }
-
-                const [, payload] = data.id_token.split('.');
-                const decoded = JSON.parse(atob(payload));
-
-                setProfile({
-                    name: decoded.name,
-                    email: decoded.email,
-                    picture: decoded.picture,
+    const fetchToken = useCallback(
+        async (authCode: string) => {
+            try {
+                const res = await fetch(`https://${domain}/oauth2/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        client_id: clientId,
+                        code: authCode,
+                        redirect_uri: redirectUri,
+                    }),
                 });
 
-                setJwt(data.id_token);
+                const data = await res.json();
 
-                router.replace('/');
-            } else {
-                console.error('Token exchange failed:', data);
+                if (data.id_token) {
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('id_token', data.id_token);
+                        localStorage.setItem('access_token', data.access_token);
+                        localStorage.setItem('refresh_token', data.refresh_token);
+                    }
+
+                    const parts = data.id_token.split('.');
+                    if (parts.length !== 3) throw new Error('Invalid JWT structure');
+
+                    const [, payload] = parts;
+                    const decoded = JSON.parse(atob(payload));
+
+                    setProfile({
+                        name: decoded.name,
+                        email: decoded.email,
+                        picture: decoded.picture,
+                    });
+
+                    setJwt(data.id_token);
+                    router.replace('/');
+                } else {
+                    console.error('Token exchange failed:', data);
+                }
+            } catch (error) {
+                console.error('Error fetching token:', error);
             }
-        } catch (err) {
-            console.error('Error fetching token:', err);
-        }
-    }, []);
+        },
+        [router]
+    );
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -79,7 +88,10 @@ export default function UserAuth() {
             const storedToken = localStorage.getItem('id_token');
             if (storedToken) {
                 try {
-                    const [, payload] = storedToken.split('.');
+                    const parts = storedToken.split('.');
+                    if (parts.length !== 3) throw new Error('Invalid JWT structure');
+
+                    const [, payload] = parts;
                     const decoded = JSON.parse(atob(payload));
                     const now = Math.floor(Date.now() / 1000);
 
@@ -95,7 +107,8 @@ export default function UserAuth() {
                     });
 
                     setJwt(storedToken);
-                } catch (err) {
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                } catch (error) {
                     localStorage.removeItem('id_token');
                 }
             }
