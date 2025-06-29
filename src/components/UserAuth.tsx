@@ -9,6 +9,13 @@ interface UserProfile {
     picture: string
 }
 
+/**
+ * React component that manages user authentication via Amazon Cognito OAuth2.
+ *
+ * Handles the OAuth2 login flow, exchanges authorization codes for tokens, stores and decodes the ID token to extract user profile information, and renders either a login button or the authenticated user's profile and JWT token. Allows copying the JWT token to the clipboard.
+ *
+ * @returns The rendered authentication UI based on the user's authentication state.
+ */
 export default function UserAuth() {
     const router = useRouter()
     const searchParams = useSearchParams()
