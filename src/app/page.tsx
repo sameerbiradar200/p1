@@ -1,6 +1,11 @@
 import UserAuth from "@/components/UserAuth";
 
 
+/**
+ * Renders the home page with a heading, a description, and the user authentication component.
+ *
+ * Displays introductory content and integrates user authentication functionality.
+ */
 export default function Home() {
   return (
       <>
