@@ -9,6 +9,7 @@ interface UserProfile {
     picture: string
 }
 
+
 /**
  * React component that manages user authentication via Amazon Cognito OAuth2.
  *
@@ -16,6 +17,7 @@ interface UserProfile {
  *
  * @returns The rendered authentication UI based on the user's authentication state.
  */
+
 export default function UserAuth() {
     const router = useRouter()
     const searchParams = useSearchParams()
