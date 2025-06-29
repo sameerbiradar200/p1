@@ -1,10 +1,12 @@
 'use client';
-
+/* eslint-disable @next/next/no-img-element */
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
+
 
 type UserProfile = {
+    family_name: string;
+    given_name: string;
     name: string;
     email: string;
     picture: string;
@@ -63,6 +65,8 @@ export default function UserAuth() {
 
                     setProfile({
                         name: decoded.name,
+                        family_name: decoded.family_name,
+                        given_name: decoded.given_name,
                         email: decoded.email,
                         picture: decoded.picture,
                     });
@@ -102,6 +106,8 @@ export default function UserAuth() {
 
                     setProfile({
                         name: decoded.name,
+                        family_name: decoded.family_name,
+                        given_name: decoded.given_name,
                         email: decoded.email,
                         picture: decoded.picture,
                     });
@@ -142,14 +148,15 @@ export default function UserAuth() {
                 textAlign: 'center',
             }}
         >
-            <Image
+            <img
                 src={profile.picture}
                 alt="Profile"
                 width={80}
                 height={80}
-                style={{ borderRadius: '50%' }}
+                style={{borderRadius: '50%'}}
             />
-            <h2>{profile.name}</h2>
+            <h2>{profile.given_name}</h2>
+            <h2>{profile.family_name}</h2>
             <p>{profile.email}</p>
             <button
                 onClick={handleCopy}
