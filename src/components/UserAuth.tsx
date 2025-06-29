@@ -1,125 +1,171 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 
-interface UserProfile {
-    name: string
-    email: string
-    picture: string
-}
+type UserProfile = {
+    name: string;
+    email: string;
+    picture: string;
+};
 
+/**
+ * React component that manages user authentication via Amazon Cognito OAuth2.
+ *
+ * Handles the OAuth2 login flow, exchanges authorization codes for tokens, stores and decodes the ID token to extract user profile information, and renders either a login button or the authenticated user's profile and JWT token. Allows copying the JWT token to the clipboard.
+ *
+ * @returns The rendered authentication UI based on the user's authentication state.
+ */
 export default function UserAuth() {
-    const router = useRouter()
-    const searchParams = useSearchParams()
-    const code = searchParams.get('code')
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const code = searchParams.get('code');
 
-    const [profile, setProfile] = useState<UserProfile | null>(null)
-    const [jwt, setJwt] = useState<string>('')
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [jwt, setJwt] = useState('');
 
-    const clientId = '4o5ag29jbf7o9lk8c9he27boc2'
-    const domain = 'ap-south-1q9uecnset.auth.ap-south-1.amazoncognito.com'
-    const redirectUri = 'https://saas.p1.sameerbiradar.xyz'
-    const loginUrl = `https://${domain}/login?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=email+openid+profile`
+    const clientId = '4o5ag29jbf7o9lk8c9he27boc2';
+    const domain = 'ap-south-1q9uecnset.auth.ap-south-1.amazoncognito.com';
+    const redirectUri = 'https://saas.p1.sameerbiradar.xyz';
+    const loginUrl = `https://${domain}/login?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=email+openid+profile`;
 
-    const fetchToken = async (authCode: string) => {
-        try {
-            const res = await fetch(`https://${domain}/oauth2/token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    grant_type: 'authorization_code',
-                    client_id: clientId,
-                    code: authCode,
-                    redirect_uri: redirectUri,
-                }),
-            })
+    const fetchToken = useCallback(
+        async (authCode: string) => {
+            try {
+                const res = await fetch(`https://${domain}/oauth2/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        client_id: clientId,
+                        code: authCode,
+                        redirect_uri: redirectUri,
+                    }),
+                });
 
-            const data = await res.json()
+                const data = await res.json();
 
-            if (data.id_token) {
-                localStorage.setItem('id_token', data.id_token)
-                setJwt(data.id_token)
+                if (data.id_token) {
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('id_token', data.id_token);
+                        localStorage.setItem('access_token', data.access_token);
+                        localStorage.setItem('refresh_token', data.refresh_token);
+                    }
 
-                const [, payload] = data.id_token.split('.')
-                const decoded = JSON.parse(atob(payload))
+                    const parts = data.id_token.split('.');
+                    if (parts.length !== 3) throw new Error('Invalid JWT structure');
 
-                setProfile({
-                    name: decoded.name,
-                    email: decoded.email,
-                    picture: decoded.picture,
-                })
+                    const [, payload] = parts;
+                    const decoded = JSON.parse(atob(payload));
 
-                router.replace('/') // Clean URL
-            } else {
-                console.error('Token exchange failed:', data)
+                    setProfile({
+                        name: decoded.name,
+                        email: decoded.email,
+                        picture: decoded.picture,
+                    });
+
+                    setJwt(data.id_token);
+                    router.replace('/');
+                } else {
+                    console.error('Token exchange failed:', data);
+                }
+            } catch (error) {
+                console.error('Error fetching token:', error);
             }
-        } catch (err) {
-            console.error('Error fetching token:', err)
-        }
-    }
+        },
+        [router]
+    );
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+
         if (code) {
-            fetchToken(code)
+            fetchToken(code);
         } else {
-            const storedToken = localStorage.getItem('id_token')
+            const storedToken = localStorage.getItem('id_token');
             if (storedToken) {
-                setJwt(storedToken)
-                const [, payload] = storedToken.split('.')
-                const decoded = JSON.parse(atob(payload))
-                setProfile({
-                    name: decoded.name,
-                    email: decoded.email,
-                    picture: decoded.picture,
-                })
+                try {
+                    const parts = storedToken.split('.');
+                    if (parts.length !== 3) throw new Error('Invalid JWT structure');
+
+                    const [, payload] = parts;
+                    const decoded = JSON.parse(atob(payload));
+                    const now = Math.floor(Date.now() / 1000);
+
+                    if (decoded.exp && decoded.exp < now) {
+                        localStorage.removeItem('id_token');
+                        return;
+                    }
+
+                    setProfile({
+                        name: decoded.name,
+                        email: decoded.email,
+                        picture: decoded.picture,
+                    });
+
+                    setJwt(storedToken);
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                } catch (error) {
+                    localStorage.removeItem('id_token');
+                }
             }
         }
-    }, [code])
+    }, [code, fetchToken]);
 
-    const handleCopy = async () => {
-        await navigator.clipboard.writeText(jwt)
-        alert('JWT copied to clipboard!')
-    }
+    const handleCopy = () => {
+        navigator.clipboard.writeText(jwt);
+        alert('JWT copied to clipboard!');
+    };
 
     if (!profile) {
         return (
-            <div className="flex justify-center mt-20">
+            <div style={{ textAlign: 'center', marginTop: '30px' }}>
                 <a href={loginUrl}>
-                    <button className="bg-blue-600 text-white px-6 py-3 rounded-lg text-lg hover:bg-blue-700 transition">
+                    <button style={{ padding: '10px 20px', fontSize: '16px' }}>
                         Login with Google
                     </button>
                 </a>
             </div>
-        )
+        );
     }
 
     return (
-        <div className="max-w-xl mx-auto mt-20 bg-white shadow-lg rounded-2xl p-6 text-center space-y-4 border border-gray-200">
-            <img
+        <div
+            style={{
+                marginTop: '30px',
+                background: '#f0f0f0',
+                padding: '20px',
+                borderRadius: '10px',
+                textAlign: 'center',
+            }}
+        >
+            <Image
                 src={profile.picture}
                 alt="Profile"
-                className="mx-auto rounded-full w-24 h-24"
+                width={80}
+                height={80}
+                style={{ borderRadius: '50%' }}
             />
-            <h2 className="text-2xl font-semibold">{profile.name}</h2>
-            <p className="text-gray-600">{profile.email}</p>
-
-            <div className="text-left">
-                <label className="block mb-1 font-semibold">JWT Token</label>
-                <textarea
-                    readOnly
-                    value={jwt}
-                    className="w-full h-32 p-2 text-xs border rounded bg-gray-50 font-mono"
-                />
-                <button
-                    onClick={handleCopy}
-                    className="mt-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
-                >
-                    Copy JWT
-                </button>
-            </div>
+            <h2>{profile.name}</h2>
+            <p>{profile.email}</p>
+            <button
+                onClick={handleCopy}
+                style={{
+                    marginTop: '10px',
+                    padding: '10px 20px',
+                    fontSize: '14px',
+                    backgroundColor: '#0070f3',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                }}
+            >
+                Copy JWT
+            </button>
         </div>
-    )
+    );
 }
