@@ -1,8 +1,8 @@
 'use client';
-
+/* eslint-disable @next/next/no-img-element */
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
+
 
 type UserProfile = {
     family_name: string;
